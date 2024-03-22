@@ -134,9 +134,9 @@ action:
               - condition: template
                 value_template: |-
                   {% set ns = namespace(alert=false) %}
-                  {%- for entity_id in alert_sensor -%}
+                  {% for entity_id in alert_sensor -%}
                     {% set ns.alert = ns.alert or is_state(entity_id, 'on') %}
-                  {%- endfor -%}
+                  {% endfor -%}
                   {{ ns.alert }}
             then:
               - service: mqtt.publish
