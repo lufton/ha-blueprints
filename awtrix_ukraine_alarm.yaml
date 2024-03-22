@@ -1,0 +1,188 @@
+blueprint:
+  name: AWTRIX Ukraine Alarm
+  description: Creates custom app for AWTRIX device with Ukraine Alarm integration
+  author: Lufton
+  domain: automation
+  source_url: https://github.com/lufton/ha-blueprints/blob/master/awtrix_ukraine_alarm.yaml
+  input:
+    device_topic:
+      name: Device topic
+      description: Select sensor that holds MQTT device topic
+      selector:
+        entity:
+          filter:
+            integration: mqtt
+            domain: sensor
+    app_name:
+      name: App name
+      description: Enter app name or leave as is for default value
+      default: ukraine-alarm
+    alert_sensor:
+      name: Alert status sensor
+      description: Select sensor that indicates alert status presence
+      selector:
+        entity:
+          filter:
+            integration: ukraine_alarm
+            domain: binary_sensor
+            device_class: safety
+          multiple: true
+    alert_color:
+      name: Alert status color
+      description: Select color for alert status notification
+      default: '#FF0000'
+      selector:
+        text:
+          type: color
+    alert_icon:
+      name: Alert status icon
+      description: Enter icon number/filename for alert status or leave empty if you don't need any
+      default:
+    alert_text:
+      name: Alert status text
+      description: Enter text for alert status
+      default: Alert
+    alert_duration:
+      name: Alert status duration
+      description: Show alert status duration instead of alert status message
+      default: false
+      selector:
+        boolean:
+    clear_color:
+      name: Clear status color
+      description: Select color for clear status notification
+      default: '#00FF00'
+      selector:
+        text:
+          type: color
+    clear_icon:
+      name: Clear status icon
+      description: Enter icon number/filename for clear status or leave empty if you don't need any
+      default:
+    clear_text:
+      name: Clear status text
+      description: Enter text for clear status
+      default: Clear
+    clear_duration:
+      name: Clear status duration
+      description: Show clear status duration instead of clear status message
+      default: false
+      selector:
+        boolean:
+
+variables:
+  device_topic: !input device_topic
+  app_name: !input app_name
+  alert_sensor: !input alert_sensor
+  alert_color: !input alert_color
+  alert_icon: !input alert_icon
+  alert_text: !input alert_text
+  alert_duration: !input alert_duration
+  clear_color: !input clear_color
+  clear_icon: !input clear_icon
+  clear_text: !input clear_text
+  clear_duration: !input clear_duration
+
+trigger:
+  - platform: state
+    id: sensor_change
+    entity_id: !input alert_sensor
+  - platform: time_pattern
+    id: with_interval
+    seconds: "*"
+
+action:
+  - choose:
+      - conditions: "{{ trigger.id == 'sensor_change' }}"
+        sequence:
+          - choose:
+              - conditions: "{{ trigger.from_state.state == 'off' and trigger.to_state.state == 'on' }}"
+                sequence:
+                  - service: mqtt.publish
+                    data_template:
+                      topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
+                      payload: |-
+                        {
+                          "icon": "{{ alert_icon }}",
+                          "text": "{{ alert_text }}",  
+                          "color": "{{ alert_color }}",
+                          "wakeup": true
+                        }
+                  - service: mqtt.publish
+                    data_template:
+                      topic: "{{ states(device_topic) }}/switch"
+                      payload: '{"name": "{{ app_name }}"}'
+              - conditions: "{{ trigger.from_state.state == 'on' and trigger.to_state.state == 'off' }}"
+                sequence:
+                  - service: mqtt.publish
+                    data:
+                      topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
+                      payload: |-
+                        {
+                          "icon": "{{ clear_icon }}",
+                          "text": "{{ clear_text }}",
+                          "color": "{{ clear_color }}",
+                          "wakeup": true
+                        }
+                  - service: mqtt.publish
+                    data_template:
+                      topic: "{{ states(device_topic) }}/switch"
+                      payload: '{"name": "{{ app_name }}"}'
+      - conditions: "{{ trigger.id == 'with_interval' }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: |-
+                  {% set ns = namespace(alert=false) %}
+                  {%- for entity_id in alert_sensor -%}
+                    {% set ns.alert = ns.alert or is_state(entity_id, 'on') %}
+                  {%- endfor -%}
+                  {{ ns.alert }}
+            then:
+              - service: mqtt.publish
+                data_template:
+                  topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
+                  payload: |-
+                    {
+                      "icon": "{{ alert_icon }}",
+                      "text":
+                        {% if not alert_duration -%}"{{ alert_text }}"
+                        {% else %}
+                          {% set ns = namespace(latest_change=now() - states[alert_sensor[0]].last_changed) %}
+                          {% for entity_id in alert_sensor -%}
+                            {% set current_change = now() - states[entity_id].last_changed %}
+                            {% if current_change < ns.latest_change %}
+                              {% set ns.latest_change = current_change %}
+                            {% endif %}
+                          {% endfor -%}
+                          {% if ns.latest_change.seconds < 3600 %}"{{ ns.latest_change.seconds | timestamp_custom('%M:%S', False) }}"
+                          {% else %}"{{ ns.latest_change.seconds | timestamp_custom('%H:%M', False) }}"
+                          {% endif %}
+                        {% endif %},
+                      "color": "{{ alert_color }}",
+                      "wakeup": true
+                    }
+            else:
+              - service: mqtt.publish
+                data:
+                  topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
+                  payload: |-
+                    {
+                      "icon": "{{ clear_icon }}",
+                      "text":
+                        {% if not clear_duration -%}"{{ clear_text }}"
+                        {% else %}
+                          {% set ns = namespace(latest_change=now() - states[alert_sensor[0]].last_changed) %}
+                          {% for entity_id in alert_sensor -%}
+                            {% set current_change = now() - states[entity_id].last_changed %}
+                            {% if current_change < ns.latest_change %}
+                              {% set ns.latest_change = current_change %}
+                            {% endif %}
+                          {% endfor -%}
+                          {% if ns.latest_change.seconds < 3600 %}"{{ ns.latest_change.seconds | timestamp_custom('%M:%S', False) }}"
+                          {% else %}"{{ ns.latest_change.seconds | timestamp_custom('%H:%M', False) }}"
+                          {% endif %}
+                        {% endif %},
+                      "color": "{{ clear_color }}",
+                      "wakeup": true
+                    }
