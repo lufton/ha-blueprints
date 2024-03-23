@@ -1,8 +1,9 @@
 blueprint:
   name: AWTRIX Ukraine Alarm
   description: Creates custom app for AWTRIX device with Ukraine Alarm integration
-  author: Lufton
   domain: automation
+  author: Lufton
+  source_url: https://github.com/lufton/ha-blueprints/blob/master/awtrix_ukraine_alarm.yaml
   input:
     device_topic:
       name: Device topic
