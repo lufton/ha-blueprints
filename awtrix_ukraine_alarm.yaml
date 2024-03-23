@@ -5,14 +5,13 @@ blueprint:
   author: Lufton
   source_url: https://github.com/lufton/ha-blueprints/blob/master/awtrix_ukraine_alarm.yaml
   input:
-    device_topic:
-      name: Device topic
-      description: Select sensor that holds MQTT device topic
+    awtrix_device:
+      name: AWTRIX Device
+      description: Select the AWTRIX device
       selector:
-        entity:
-          filter:
-            integration: mqtt
-            domain: sensor
+        device:
+          integration: mqtt
+          manufacturer: Blueforcer
     app_name:
       name: App name
       description: Enter app name or leave as is for default value
@@ -76,12 +75,13 @@ blueprint:
           mode: box
 
 variables:
+  awtrix_device: !input awtrix_device
   alert_sensors: !input alert_sensors
   app_name: !input app_name
-  device_topic: !input device_topic
-  app_topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
-  switch_topic: "{{ states(device_topic) }}/switch"
-  rtttl_topic: "{{ states(device_topic) }}/rtttl"
+  device_topic: "{{ states((device_entities(awtrix_device) | select('search', 'device_topic') | list)[0]) }}"
+  app_topic: "{{ device_topic }}/custom/{{ app_name }}"
+  switch_topic: "{{ device_topic }}/switch"
+  rtttl_topic: "{{ device_topic }}/rtttl"
   switch_payload: "{\"name\": \"{{ app_name }}\"}"
   alert_icon: !input alert_icon
   alert_text: !input alert_text
@@ -132,11 +132,14 @@ action:
       topic: "{{ rtttl_topic }}"
       payload: "{{ alert_rtttl }}"
     alias: Play alert rtttl sound
-  - delay:
-      hours: 0
-      minutes: 0
-      seconds: 3
-      milliseconds: 0
+  - wait_template: |-
+      {% set ns = namespace(alert=false) %}
+      {% for alert_sensor in alert_sensors %}
+        {% set ns.alert = ns.alert or is_state(alert_sensor, 'on') %}
+      {% endfor %}
+      {{ not ns.alert }}
+    continue_on_timeout: true
+    timeout: "00:00:03"
     alias: Wait for small delay
   - alias: Repeat updating app untill alert is gone
     repeat:
@@ -150,9 +153,9 @@ action:
                 "icon": "{{ alert_icon }}",
                 "text":
                   {% set ns = namespace(latest_change=timedelta(days=365)) %}
-                  {% for alert_sensor in alert_sensors -%}
+                  {% for alert_sensor in alert_sensors | select('is_state', 'on') | list -%}
                     {% set current_change = now() - states[alert_sensor].last_changed %}
-                    {% if is_state(alert_sensor, 'on') and current_change < ns.latest_change %}
+                    {% if current_change < ns.latest_change %}
                       {% set ns.latest_change = current_change %}
                     {% endif %}
                   {% endfor -%}
@@ -172,7 +175,7 @@ action:
       while:
         - alias: At least one of alert sensors is active
           condition: template
-          value_template: >-
+          value_template: |-
             {% set ns = namespace(alert=false) %}
             {% for alert_sensor in alert_sensors %}
               {% set ns.alert = ns.alert or is_state(alert_sensor, 'on') %}
@@ -206,7 +209,6 @@ action:
           seconds: "{{ clear_dismiss_timeout }}"
         alias: Delay dismissing alarm app (clear)
       - service: mqtt.publish
-        metadata: {}
         data:
           retain: false
           topic: "{{ app_topic }}"
