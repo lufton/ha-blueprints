@@ -1,9 +1,8 @@
 blueprint:
-  name: AWTRIX Ukraine Alarm copy
+  name: AWTRIX Ukraine Alarm
   description: Creates custom app for AWTRIX device with Ukraine Alarm integration
-  domain: automation
   author: Lufton
-  source_url: https://github.com/lufton/ha-blueprints/blob/master/awtrix_ukraine_alarm.yaml
+  domain: automation
   input:
     device_topic:
       name: Device topic
@@ -16,9 +15,9 @@ blueprint:
     app_name:
       name: App name
       description: Enter app name or leave as is for default value
-      default: ukraine-alarm
-    alert_sensor:
-      name: Alert status sensor
+      default: UkraineAlarm
+    alert_sensors:
+      name: Alert status sensors
       description: Select sensor that indicates alert status presence
       selector:
         entity:
@@ -42,12 +41,10 @@ blueprint:
       name: Alert status text
       description: Enter text for alert status
       default: Alert
-    alert_duration:
-      name: Alert status duration
-      description: Show alert status duration instead of alert status message
-      default: false
-      selector:
-        boolean:
+    alert_rtttl:
+      name: Alert rtttl sound
+      description: Enter rtttl sound that will be played with alert status or leave empty if you don't need any
+      default: AirAlarm:d=4,o=5,b=100:16d6,16e6,16f#6,16g6,16a6,16b6,16c7,16d7,16c7,16b6,16a6,16g6,16f#6,16e6,16d6,16c6,16d6,16e6,16f#6,16g6,16a6,16b6,16c7,16d7,16c7,16b6,16a6,16g6,16f#6,16e6,16d6,16c6,16d6,16e6,16f#6,16g6,16a6,16b6,16c7,16d7,16c7,16b6,16a6,16g6,16f#6,16e6,16d6,16c6
     clear_color:
       name: Clear status color
       description: Select color for clear status notification
@@ -63,126 +60,154 @@ blueprint:
       name: Clear status text
       description: Enter text for clear status
       default: Clear
-    clear_duration:
-      name: Clear status duration
-      description: Show clear status duration instead of clear status message
-      default: false
+    clear_rtttl:
+      name: Clear rtttl sound
+      description: Enter rtttl sound that will be played with clear status or leave empty if you don't need any
+      default: Relief:d=4,o=5,b=100:8g,8e,8c,8g,8e,8c,8g,8e
+    clear_dismiss_timeout:
+      name: Clear dismiss timeout
+      description: Enter timeout for clear status dismission or set to 0 to keep status
+      default: 5
       selector:
-        boolean:
+        number:
+          min: 0
+          max: 99999
+          mode: box
 
 variables:
-  device_topic: !input device_topic
+  alert_sensors: !input alert_sensors
   app_name: !input app_name
-  alert_sensor: !input alert_sensor
-  alert_color: !input alert_color
+  device_topic: !input device_topic
+  app_topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
+  switch_topic: "{{ states(device_topic) }}/switch"
+  rtttl_topic: "{{ states(device_topic) }}/rtttl"
+  switch_payload: "{\"name\": \"{{ app_name }}\"}"
   alert_icon: !input alert_icon
   alert_text: !input alert_text
-  alert_duration: !input alert_duration
-  clear_color: !input clear_color
+  alert_color: !input alert_color
+  alert_rtttl: !input alert_rtttl
+  alert_payload: |-
+    {
+      "icon": "{{ alert_icon }}",
+      "text": "{{ alert_text }}",
+      "color": "{{ alert_color }}",
+      "wakeup": true
+    }
   clear_icon: !input clear_icon
   clear_text: !input clear_text
-  clear_duration: !input clear_duration
+  clear_color: !input clear_color
+  clear_rtttl: !input clear_rtttl
+  clear_dismiss_timeout: !input clear_dismiss_timeout
+  clear_payload: |-
+    {
+      "icon": "{{ clear_icon }}",
+      "text": "{{ clear_text }}",
+      "color": "{{ clear_color }}",
+      "wakeup": true
+    }
 
 trigger:
-  - platform: state
+  - alias: Alert raised
+    platform: state
     id: sensor_change
-    entity_id: !input alert_sensor
-  - platform: time_pattern
-    id: with_interval
-    seconds: "*"
+    entity_id: !input alert_sensors
 
 action:
-  - choose:
-      - conditions: "{{ trigger.id == 'sensor_change' }}"
-        sequence:
-          - choose:
-              - conditions: "{{ trigger.from_state.state == 'off' and trigger.to_state.state == 'on' }}"
-                sequence:
-                  - service: mqtt.publish
-                    data_template:
-                      topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
-                      payload: |-
-                        {
-                          "icon": "{{ alert_icon }}",
-                          "text": "{{ alert_text }}",  
-                          "color": "{{ alert_color }}",
-                          "wakeup": true
-                        }
-                  - service: mqtt.publish
-                    data_template:
-                      topic: "{{ states(device_topic) }}/switch"
-                      payload: '{"name": "{{ app_name }}"}'
-              - conditions: "{{ trigger.from_state.state == 'on' and trigger.to_state.state == 'off' }}"
-                sequence:
-                  - service: mqtt.publish
-                    data:
-                      topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
-                      payload: |-
-                        {
-                          "icon": "{{ clear_icon }}",
-                          "text": "{{ clear_text }}",
-                          "color": "{{ clear_color }}",
-                          "wakeup": true
-                        }
-                  - service: mqtt.publish
-                    data_template:
-                      topic: "{{ states(device_topic) }}/switch"
-                      payload: '{"name": "{{ app_name }}"}'
-      - conditions: "{{ trigger.id == 'with_interval' }}"
-        sequence:
-          - if:
-              - condition: template
-                value_template: |-
-                  {% set ns = namespace(alert=false) %}
-                  {%- for entity_id in alert_sensor -%}
-                    {% set ns.alert = ns.alert or is_state(entity_id, 'on') %}
-                  {%- endfor -%}
-                  {{ ns.alert }}
-            then:
-              - service: mqtt.publish
-                data_template:
-                  topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
-                  payload: |-
-                    {
-                      "icon": "{{ alert_icon }}",
-                      "text":
-                        {% if not alert_duration -%}"{{ alert_text }}"
-                        {% else %}
-                          {% set ns = namespace(latest_change=now() - states[alert_sensor[0]].last_changed) %}
-                          {% for entity_id in alert_sensor -%}
-                            {% set current_change = now() - states[entity_id].last_changed %}
-                            {% if current_change < ns.latest_change %}
-                              {% set ns.latest_change = current_change %}
-                            {% endif %}
-                          {% endfor -%}
-                          {% if ns.latest_change.seconds < 3600 %}"{{ ns.latest_change.seconds | timestamp_custom('%M:%S', False) }}"
-                          {% else %}"{{ ns.latest_change.seconds | timestamp_custom('%H:%M', False) }}"
-                          {% endif %}
-                        {% endif %},
-                      "color": "{{ alert_color }}",
-                      "wakeup": true
-                    }
-            else:
-              - service: mqtt.publish
-                data:
-                  topic: "{{ states(device_topic) }}/custom/{{ app_name }}"
-                  payload: |-
-                    {
-                      "icon": "{{ clear_icon }}",
-                      "text":
-                        {% if not clear_duration -%}"{{ clear_text }}"
-                        {% else %}
-                          {% set ns = namespace(latest_change=now() - states[alert_sensor[0]].last_changed) %}
-                          {% for entity_id in alert_sensor -%}
-                            {% set current_change = now() - states[entity_id].last_changed %}
-                            {% if current_change < ns.latest_change %}
-                              {% set ns.latest_change = current_change %}
-                            {% endif %}
-                          {% endfor -%}
-                          {% if ns.latest_change.seconds < 3600 %}"{{ ns.latest_change.seconds | timestamp_custom('%M:%S', False) }}"
-                          {% else %}"{{ ns.latest_change.seconds | timestamp_custom('%H:%M', False) }}"
-                          {% endif %}
-                        {% endif %},
-                      "color": "{{ clear_color }}",
-                      "wakeup": true
-                    }
+  - service: mqtt.publish
+    data:
+      retain: false
+      topic: "{{ app_topic }}"
+      payload: "{{ alert_payload }}"
+    alias: Create alarm app (alert)
+  - service: mqtt.publish
+    data:
+      retain: false
+      topic: "{{ switch_topic }}"
+      payload: "{{ switch_payload }}"
+    alias: Switch to alarm app
+  - service: mqtt.publish
+    data:
+      retain: false
+      topic: "{{ rtttl_topic }}"
+      payload: "{{ alert_rtttl }}"
+    alias: Play alert rtttl sound
+  - delay:
+      hours: 0
+      minutes: 0
+      seconds: 3
+      milliseconds: 0
+    alias: Wait for small delay
+  - alias: Repeat updating app untill alert is gone
+    repeat:
+      sequence:
+        - service: mqtt.publish
+          data:
+            retain: false
+            topic: "{{ app_topic }}"
+            payload: |-
+              {
+                "icon": "{{ alert_icon }}",
+                "text":
+                  {% set ns = namespace(latest_change=timedelta(days=365)) %}
+                  {% for alert_sensor in alert_sensors -%}
+                    {% set current_change = now() - states[alert_sensor].last_changed %}
+                    {% if is_state(alert_sensor, 'on') and current_change < ns.latest_change %}
+                      {% set ns.latest_change = current_change %}
+                    {% endif %}
+                  {% endfor -%}
+                  {% if ns.latest_change.seconds < 3600 %}"{{ ns.latest_change.seconds | timestamp_custom('%M:%S', False) }}"
+                  {% else %}"{{ ns.latest_change.seconds | timestamp_custom('%H:%M', False) }}"
+                  {% endif %},
+                "color": "{{ alert_color }}",
+                "wakeup": true
+              }
+          alias: Update alarm app (alert)
+        - delay:
+            hours: 0
+            minutes: 0
+            seconds: 1
+            milliseconds: 0
+          alias: Delay 1 second before updating alarm app (alert)
+      while:
+        - alias: At least one of alert sensors is active
+          condition: template
+          value_template: >-
+            {% set ns = namespace(alert=false) %}
+            {% for alert_sensor in alert_sensors %}
+              {% set ns.alert = ns.alert or is_state(alert_sensor, 'on') %}
+            {% endfor %}
+            {{ ns.alert }}
+  - service: mqtt.publish
+    data:
+      retain: false
+      topic: "{{ app_topic }}"
+      payload: "{{ clear_payload }}"
+    alias: Create alarm app (clear)
+  - service: mqtt.publish
+    data:
+      retain: false
+      topic: "{{ switch_topic }}"
+      payload: "{{ switch_payload }}"
+    alias: Switch to alarm app (clear)
+  - service: mqtt.publish
+    data:
+      retain: false
+      topic: "{{ rtttl_topic }}"
+      payload: "{{ clear_rtttl }}"
+    alias: Play clear rtttl sound
+  - alias: If dismiss clear status timeout > 0
+    if:
+      - condition: template
+        value_template: "{{ clear_dismiss_timeout > 0 }}"
+        alias: Dismiss clear status timeout > 0
+    then:
+      - delay:
+          seconds: "{{ clear_dismiss_timeout }}"
+        alias: Delay dismissing alarm app (clear)
+      - service: mqtt.publish
+        metadata: {}
+        data:
+          retain: false
+          topic: "{{ app_topic }}"
+        alias: Dismiss alarm app (clear)
+mode: single
