@@ -1,8 +1,8 @@
 blueprint:
-  name: AWTRIX Ukraine Alarm
+  name: AWTRIX Ukraine Alarm copy
   description: Creates custom app for AWTRIX device with Ukraine Alarm integration
-  author: Lufton
   domain: automation
+  author: Lufton
   source_url: https://github.com/lufton/ha-blueprints/blob/master/awtrix_ukraine_alarm.yaml
   input:
     device_topic:
@@ -134,9 +134,9 @@ action:
               - condition: template
                 value_template: |-
                   {% set ns = namespace(alert=false) %}
-                  {% for entity_id in alert_sensor -%}
+                  {%- for entity_id in alert_sensor -%}
                     {% set ns.alert = ns.alert or is_state(entity_id, 'on') %}
-                  {% endfor -%}
+                  {%- endfor -%}
                   {{ ns.alert }}
             then:
               - service: mqtt.publish
