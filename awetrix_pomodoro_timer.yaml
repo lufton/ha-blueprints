@@ -1,0 +1,347 @@
+blueprint:
+  name: AWTRIX Pomodoro Timer
+  description: Creates custom app for AWTRIX device with Pomodoro timer
+  domain: automation
+  author: Lufton
+  source_url: https://github.com/lufton/ha-blueprints/blob/master/awetrix_pomodoro_timer.yaml
+  input:
+    awtrix_device:
+      name: AWTRIX Device
+      description: Select the AWTRIX device
+      selector:
+        device:
+          integration: mqtt
+          manufacturer: Blueforcer
+    app_name:
+      name: App name
+      description: Enter app name or leave as is for default value
+      default: Pomodoro
+    timer:
+      name: Timer
+      description: Select timer to be used as pomodoro timer (create helper timer and set default cycle duration, e.g. 25 minutes)
+      selector:
+        entity:
+          filter:
+            domain: timer
+    counter:
+      name: Counter
+      description: Select counter to be used as completed pomodoros (create helper counter and set minimum to 0, maximum to 16, initial to 0 and step to 1)
+      selector:
+        entity:
+          filter:
+            domain: counter
+    short_break:
+      name: Short break
+      description: Set short break duration (short break is a regular break between pomodoros), e.g. 5 minutes
+      default:
+        minutes: 5
+      selector:
+        duration:
+    long_break:
+      name: Long break
+      description: Set short break duration (long break is a break after each pomodoro that is multiple of 4), e.g. 15 minutes
+      default:
+        minutes: 15
+      selector:
+        duration:
+    reminder:
+      name: Reminder
+      description: Set reminder duration (reminder will be played if timer is not started or paused), e.g. 5 minutes
+      default:
+        minutes: 5
+      selector:
+        duration:
+    show_pomodoros:
+      name: Show pomodoros
+      description: >-
+        Check to show red dots around timer that indicates completed pomodoros:
+
+        Blinking dot – current pomodoro
+
+        Short space – short break
+
+        Long space – long break
+      default: true
+      selector:
+        boolean:
+    illuminance_threshold:
+      name: Illuminance threshold
+      description: Set illuminance threshold that is gonna be checked to determine if pomodoro should be reset
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 10
+          unit_of_measurement: lx
+    reset_time:
+      name: Reset time
+      description: Set time when pomodoros should reset (usually at night time when timer is not in use)
+      default:  03:00:00
+      selector:
+        time:
+    start_text:
+      name: Start text
+      description: Enter text as a hint for user to press a button to start pomodoro
+      default: Press
+      selector:
+        text:
+    done_text:
+      name: Done text
+      description: Enter text as a hint for user when all pomodoros are completed
+      default: Done!
+      selector:
+        text:
+    blink_text:
+      name: Blink text
+      description: Enter interval of text blinking (set 0 to avoid blinking)
+      default: 500
+      selector:
+        number:
+          min: 0
+          max: 5000
+          step: 100
+          unit_of_measurement: ms
+    pomodoro_icon:
+      name: Pomodoro icon
+      description: Enter icon number/filename for pomodoro timer
+      default:
+    break_icon:
+      name: Break icon
+      description: Enter icon number/filename for break timer
+      default:
+    start_rtttl:
+      name: Start rtttl sound
+      description: Enter rtttl sound that will be played when timer is ready to start
+      default: PomodoroStart:d=4,o=5,b=100:8e,8g,8c6,8e,8c6,8g,8e,8c6
+    finish_rtttl:
+      name: Finish rtttl sound
+      description: Enter rtttl sound that will be played when timer is finished
+      default: PomodoroFinish:d=4,o=5,b=100:8c,8g,8c6,8g,8c6,8g,8c6,8g,8c6
+    reminder_rtttl:
+      name: Reminder rtttl sound
+      description: Enter rtttl sound that will be played when timer is not active (not started or paused)
+      default: PomodoroReminder:d=4,o=5,b=120:8c,8e,8g,8c6
+trigger_variables:
+  awtrix_device: !input awtrix_device
+  illuminance_threshold: !input illuminance_threshold
+  timer: !input timer
+  button: "{{ (device_entities(awtrix_device) | select('search', 'button_select') | list)[0] }}"
+  illuminance: "{{ (device_entities(awtrix_device) | select('search', 'illuminance') | list)[0] }}"
+  current_app: "{{ (device_entities(awtrix_device) | select('search', 'current_app') | list)[0] }}"
+variables:
+  app_name: !input app_name
+  device_topic: "{{ states((device_entities(awtrix_device) | select('search', 'device_topic') | list)[0]) }}"
+  app_topic: "{{ device_topic }}/custom/{{ app_name }}"
+  notify_topic: "{{ device_topic }}/notify"
+  switch_topic: "{{ device_topic }}/switch"
+  rtttl_topic: "{{ device_topic }}/rtttl"
+  switch_payload:
+    name: "{{ app_name }}"
+  counter: !input counter
+  short_break: !input short_break
+  long_break: !input long_break
+  reminder: !input reminder
+  show_pomodoros: !input show_pomodoros
+  reset_time: !input reset_time
+  start_text: !input start_text
+  done_text: !input done_text
+  blink_text: !input blink_text
+  pomodoro_icon: !input pomodoro_icon
+  break_icon: !input break_icon
+  start_rtttl: !input start_rtttl
+  finish_rtttl: !input finish_rtttl
+  reminder_rtttl: !input reminder_rtttl
+trigger:
+  - platform: state
+    entity_id: !input timer
+    to: active
+    alias: Timer started
+    id: timer_started
+  - platform: state
+    entity_id: !input timer
+    to: paused
+    id: timer_paused
+    alias: Timer paused
+  - platform: state
+    entity_id: !input timer
+    to: idle
+    id: timer_stopped
+    alias: Timer stopped
+  - alias: Button pressed
+    platform: template
+    value_template: "{{ is_state(button, 'on') }}"
+    id: button_pressed
+  - alias: Day ended
+    platform: time
+    at: !input reset_time
+    id: day_ended
+    enabled: true
+  - alias: Illuminance sensor closed
+    platform: template
+    value_template: "{{ states(illuminance) | int <= illuminance_threshold }}"
+    id: illuminance_sensor_closed
+action:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: timer_started
+        sequence:
+          - service: mqtt.publish
+            data:
+              topic: "{{ switch_topic }}"
+              payload: "{{ switch_payload }}"
+          - repeat:
+              sequence:
+                - service: mqtt.publish
+                  data:
+                    topic: "{{ app_topic }}"
+                    payload: >-
+                      {% set it_is_a_break = trigger.from_state.attributes.duration != trigger.to_state.attributes.duration %}
+                      {% set duration = as_timedelta(state_attr(timer, 'duration')).total_seconds() %}
+                      {% set remaining = (as_datetime(state_attr(timer, 'finishes_at')) - now().replace(microsecond=0)).total_seconds() %}
+                      {% set progress = (duration - remaining) / duration %}
+                      {% set draw = namespace(items=[]) %}
+                      {% for i in range(states(counter) | int + 1) %}
+                        {% if not loop.last or (remaining % 2 == 0 and not it_is_a_break) %}
+                          {% set draw.items = draw.items + [dict(dp=[12 + (2 if (i % 8) > 3 else 0) + ((i * 2) % 16), 0 if i < 8 else 6, [255 * progress, 0, 0] if loop.last and not it_is_a_break else "#FF0000"])] %}
+                        {% endif %}
+                      {% endfor %}
+                      {{ dict(icon=break_icon if it_is_a_break else pomodoro_icon, text=remaining | timestamp_custom('%M:%S' if remaining % 2 == 0 else '%M %S', False), progress=(progress * 100) | round(0), draw=draw.items if show_pomodoros else []) }}
+                - wait_template: "{{ not is_state(timer, 'active') }}"
+                  continue_on_timeout: true
+                  timeout: 1
+              while:
+                - condition: template
+                  value_template: "{{ is_state(timer, 'active') }}"
+      - conditions:
+          - condition: trigger
+            id: timer_paused
+        sequence:
+          - service: mqtt.publish
+            data:
+              topic: "{{ switch_topic }}"
+              payload: "{{ switch_payload }}"
+          - repeat:
+              sequence:
+                - wait_template: "{{ not is_state(timer, 'paused') }}"
+                  continue_on_timeout: true
+                  timeout: "{{ reminder.get('hours', 0) * 3600 + reminder.get('minutes', 0) * 60 + reminder.get('seconds', 0) }}"
+                - if:
+                    - condition: template
+                      value_template: "{{ not wait.completed }}"
+                  then:
+                    - service: mqtt.publish
+                      data:
+                        topic: "{{ rtttl_topic }}"
+                        payload: "{{ reminder_rtttl }}"
+              until:
+                - condition: template
+                  value_template: "{{ not is_state(timer, 'paused') }}"
+      - conditions:
+          - condition: trigger
+            id: timer_stopped
+          - condition: template
+            value_template: "{{ (states(illuminance) | int > illuminance_threshold or not is_state(current_app, app_name)) and now().replace(microsecond=0) != today_at(reset_time) }}"
+        sequence:
+          - service: mqtt.publish
+            data:
+              topic: "{{ switch_topic }}"
+              payload: "{{ switch_payload }}"
+          - if:
+              - condition: template
+                value_template: "{{ trigger.from_state.attributes.duration == trigger.to_state.attributes.duration }}"
+            then:
+              - service: mqtt.publish
+                data:
+                  topic: "{{ rtttl_topic }}"
+                  payload: "{{ finish_rtttl }}"
+              - service: counter.increment
+                target:
+                  entity_id: "{{ counter }}"
+              - if:
+                  - condition: template
+                    value_template: "{{ is_state(counter, state_attr(counter, 'maximum') | string) }}"
+                then:
+                  - service: counter.reset
+                    target:
+                      entity_id: "{{ counter }}"
+                  - service: mqtt.publish
+                    data:
+                      topic: "{{ app_topic }}"
+                      payload: "{{ dict(icon=pomodoro_icon, text=done_text, blinkText=blink_text) }}"
+                  - delay:
+                      seconds: 5
+                  - service: mqtt.publish
+                    data:
+                      topic: "{{ app_topic }}"
+                      payload: "{{ dict(icon=pomodoro_icon, text=start_text, blinkText=blink_text) }}"
+                else:
+                  - service: timer.start
+                    data:
+                      duration: >-
+                        {% if states(counter) | int % 4 == 0 %}{{ long_break }}
+                        {% else %}{{ short_break }}
+                        {% endif %}
+                    target:
+                      entity_id: "{{ timer }}"
+            else:
+              - service: mqtt.publish
+                data:
+                  topic: "{{ app_topic }}"
+                  payload: "{{ dict(icon=pomodoro_icon, text=start_text, blinkText=blink_text) }}"
+              - repeat:
+                  sequence:
+                    - wait_template: "{{ is_state(timer, 'active') }}"
+                      continue_on_timeout: true
+                      timeout: "{{ reminder.get('hours', 0) * 3600 + reminder.get('minutes', 0) * 60 + reminder.get('seconds', 0) }}"
+                    - if:
+                        - condition: template
+                          value_template: "{{ not wait.completed }}"
+                      then:
+                        - service: mqtt.publish
+                          data:
+                            topic: "{{ rtttl_topic }}"
+                            payload: "{{ reminder_rtttl }}"
+                  until:
+                    - condition: template
+                      value_template: "{{ is_state(timer, 'active') }}"
+      - conditions:
+          - condition: trigger
+            id: button_pressed
+          - condition: template
+            value_template: "{{ is_state(current_app, app_name) }}"
+        sequence:
+          - wait_template: "{{ is_state(button, 'off') }}"
+          - condition: template
+            value_template: >-
+              {% set duration = as_timedelta(state_attr(timer, 'duration')).total_seconds() %}
+              {% set short_break_duration = 3600 * short_break.get('hours', 0) + 60 * short_break.get('minutes', 0) + short_break.get('seconds', 0) %}
+              {% set long_break_duration = 3600 * long_break.get('hours', 0) + 60 * long_break.get('minutes', 0) + long_break.get('seconds', 0) %}
+              {{ (duration != short_break_duration) and (duration != long_break_duration) }}
+          - if:
+              - condition: template
+                value_template: "{{ is_state(timer, 'active') }}"
+            then:
+              - service: timer.pause
+                target:
+                  entity_id: "{{ timer }}"
+            else:
+              - service: timer.start
+                target:
+                  entity_id: "{{ timer }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.id == 'day_ended' or (trigger.id == 'illuminance_sensor_closed' and is_state(current_app, app_name)) }}"
+        sequence:
+          - service: counter.reset
+            target:
+              entity_id: "{{ counter }}"
+          - service: timer.cancel
+            target:
+              entity_id: "{{ timer }}"
+          - service: mqtt.publish
+            data:
+              topic: "{{ app_topic }}"
+              payload: "{{ dict(icon=pomodoro_icon, text=start_text, blinkText=blink_text) }}"
+mode: parallel
+max: 10
