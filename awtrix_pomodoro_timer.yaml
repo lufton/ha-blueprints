@@ -3,11 +3,7 @@ blueprint:
   description: Creates custom app for AWTRIX device with Pomodoro timer
   domain: automation
   author: Lufton
-<<<<<<< HEAD
   source_url: https://github.com/lufton/ha-blueprints/blob/main/awtrix_pomodoro_timer.yaml
-=======
-  source_url: https://github.com/lufton/ha-blueprints/blob/main/awetrix_pomodoro_timer.yaml
->>>>>>> 7fb1b3e75fc5daaac320e2df290ad588c352b209
   input:
     awtrix_device:
       name: AWTRIX Device
