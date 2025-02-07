@@ -212,5 +212,6 @@ action:
         data:
           retain: false
           topic: "{{ app_topic }}"
+          payload: ""
         alias: Dismiss alarm app (clear)
 mode: single
