@@ -29,7 +29,7 @@ blueprint:
     alert_color:
       name: Alert status color
       description: Select color for alert status notification
-      default: '#FF0000'
+      default: "#FF0000"
       selector:
         text:
           type: color
@@ -48,7 +48,7 @@ blueprint:
     clear_color:
       name: Clear status color
       description: Select color for clear status notification
-      default: '#00FF00'
+      default: "#00FF00"
       selector:
         text:
           type: color
@@ -82,7 +82,7 @@ variables:
   app_topic: "{{ device_topic }}/custom/{{ app_name }}"
   switch_topic: "{{ device_topic }}/switch"
   rtttl_topic: "{{ device_topic }}/rtttl"
-  switch_payload: "{\"name\": \"{{ app_name }}\"}"
+  switch_payload: '{"name": "{{ app_name }}"}'
   alert_icon: !input alert_icon
   alert_text: !input alert_text
   alert_color: !input alert_color
@@ -110,6 +110,12 @@ variables:
 trigger:
   - alias: Alert raised
     platform: state
+    from:
+      - "on"
+      - "off"
+    to:
+      - "off"
+      - "on"
     id: sensor_change
     entity_id: !input alert_sensors
 
