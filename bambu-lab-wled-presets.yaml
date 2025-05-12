@@ -96,7 +96,7 @@ action:
                 preset: "{{ states(print_status) }}"
             - if:
                 - condition: template
-                  value_template: "{{ preset in state_attr('select.bambu_lab_x1c_wled_preset', 'options') }}"
+                  value_template: "{{ preset in state_attr(wled_preset, 'options') }}"
               then:
                 - action: select.select_option
                   data:
@@ -109,7 +109,7 @@ action:
           sequence:
             - if:
                 - condition: template
-                  value_template: "{{ 'idle' in state_attr('select.bambu_lab_x1c_wled_preset', 'options') }}"
+                  value_template: "{{ 'idle' in state_attr(wled_preset, 'options') }}"
               then:
                 - action: select.select_option
                   data:
@@ -136,14 +136,23 @@ action:
             condition: trigger
             id: chamber_light
           sequence:
-            action: "{% if is_state(chamber_light, 'on') %}light.turn_on{% else %}light.turn_off{% endif %}"
+            action: light.turn_on
             target:
               entity_id: !input wled_light
     else:
       - condition: state
         entity_id: !input wled_light
         state: "on"
+      - if:
+          - condition: template
+            value_template: "{{ 'idle' in state_attr(wled_preset, 'options') }}"
+        then:
+          - action: select.select_option
+            data:
+              option: "idle"
+            target:
+              entity_id: !input wled_preset
       - action: light.turn_off
         target:
           entity_id: !input wled_light
-mode: restart
+mode: single
