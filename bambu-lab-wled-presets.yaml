@@ -1,0 +1,147 @@
+blueprint:
+  name: Bambu Lab Printer WLED Presets
+  description: Control WLED light presets according to the Bambu Lab printer state
+  domain: automation
+  input:
+    print_status:
+      name: Print status sensor
+      description: Select the printer's print status sensor.
+      selector:
+        entity:
+          filter:
+            integration: bambu_lab
+            domain: sensor
+    current_stage:
+      name: Current stage sensor
+      description: Select the printer's current stage sensor.
+      selector:
+        entity:
+          filter:
+            integration: bambu_lab
+            domain: sensor
+    chamber_light:
+      name: Chamber light
+      description: Select the printer's chamber light.
+      selector:
+        entity:
+          filter:
+            integration: bambu_lab
+            domain: light
+    wled_light:
+      name: WLED light
+      description: Select the WLED light you want to control.
+      selector:
+        entity:
+          filter:
+            integration: wled
+            domain: light
+    wled_preset:
+      name: WLED preset
+      description: Select the WLED light preset select you want to control.
+      selector:
+        entity:
+          filter:
+            integration: wled
+            domain: select
+    finish_idle_duration:
+      name: Finish to idle duration
+      description: Select the duration before switching from finish state to idle state.
+      default:
+        hours: 1
+      selector:
+        duration:
+variables:
+  print_status: !input print_status
+  current_stage: !input current_stage
+  chamber_light: !input chamber_light
+  wled_preset: !input wled_preset
+alias: Bambu Lab Printer WLED Presets
+description: Control WLED light presets according to the Bambu Lab printer state
+trigger:
+  - platform: state
+    id: print_status
+    alias: When printer's print status sensor's state changes
+    entity_id: !input print_status
+  - platform: state
+    id: finish_idle
+    alias: When printer's print status sensor's state is finish for curtain duration
+    entity_id: !input print_status
+    to: "finish"
+    for: !input finish_idle_duration
+  - platform: state
+    id: current_stage
+    alias: When printer's current stage sensor's state changes
+    entity_id: !input current_stage
+  - platform: state
+    id: chamber_light
+    alias: When printer's chamber light's state changes
+    entity_id: !input chamber_light
+    to:
+      - "on"
+      - "off"
+action:
+  - if:
+      - condition: state
+        entity_id: !input chamber_light
+        state: "on"
+    then:
+      - choose:
+        - conditions:
+            condition: trigger
+            id: print_status
+          sequence:
+            - variables:
+                preset: "{{ states(print_status) }}"
+            - if:
+                - condition: template
+                  value_template: "{{ preset in state_attr('select.bambu_lab_x1c_wled_preset', 'options') }}"
+              then:
+                - action: select.select_option
+                  data:
+                    option: "{{ preset }}"
+                  target:
+                    entity_id: !input wled_preset
+        - conditions:
+            condition: trigger
+            id: finish_idle
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ 'idle' in state_attr('select.bambu_lab_x1c_wled_preset', 'options') }}"
+              then:
+                - action: select.select_option
+                  data:
+                    option: "idle"
+                  target:
+                    entity_id: !input wled_preset
+      - choose:
+        - conditions:
+            condition: trigger
+            id: current_stage
+          sequence:
+            - variables:
+                preset: "{{ states(current_stage) }}"
+            - if:
+                - condition: template
+                  value_template: "{{ preset in state_attr(wled_preset, 'options') }}"
+              then:
+                - action: select.select_option
+                  data:
+                    option: "{{ preset }}"
+                  target:
+                    entity_id: !input wled_preset
+        - conditions:
+            condition: trigger
+            id: chamber_light
+          sequence:
+            action: "{% if is_state(chamber_light, 'on') %}light.turn_on{% else %}light.turn_off{% endif %}"
+            target:
+              entity_id: !input wled_light
+    else:
+      - condition: state
+        entity_id: !input wled_light
+        state: "on"
+      - action: light.turn_off
+        target:
+          entity_id: !input wled_light
+mode: restart
