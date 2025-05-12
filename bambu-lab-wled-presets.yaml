@@ -127,7 +127,7 @@ action:
                 preset: "{{ states(print_status) }}"
             - if:
                 - condition: template
-                  value_template: "{{ preset in state_attr(wled_preset, 'options') }}"
+                  value_template: "{{ preset in state_attr(wled_preset, 'options') and not is_state(wled_preset, preset) }}"
               then:
                 - action: select.select_option
                   data:
@@ -140,7 +140,7 @@ action:
           sequence:
             - if:
                 - condition: template
-                  value_template: "{{ 'idle' in state_attr(wled_preset, 'options') }}"
+                  value_template: "{{ 'idle' in state_attr(wled_preset, 'options') and not is_state(wled_preset, 'idle') }}"
               then:
                 - action: select.select_option
                   data:
@@ -156,7 +156,7 @@ action:
                 preset: "{{ states(current_stage) }}"
             - if:
                 - condition: template
-                  value_template: "{{ preset in state_attr(wled_preset, 'options') }}"
+                  value_template: "{{ preset in state_attr(wled_preset, 'options') and not is_state(wled_preset, preset) }}"
               then:
                 - action: select.select_option
                   data:
@@ -176,7 +176,7 @@ action:
           sequence:
             if:
               - condition: template
-                value_template: "{{ idle_on_enclosure_door and is_state(print_status, 'finish') and 'idle' in state_attr(wled_preset, 'options') }}"
+                value_template: "{{ idle_on_enclosure_door and is_state(print_status, 'finish') and 'idle' in state_attr(wled_preset, 'options') and not is_state(wled_preset, 'idle') }}"
             then:
               - action: select.select_option
                 data:
@@ -189,7 +189,7 @@ action:
         state: "on"
       - if:
           - condition: template
-            value_template: "{{ idle_on_chamber_light and is_state(print_status, 'finish') and 'idle' in state_attr(wled_preset, 'options') }}"
+            value_template: "{{ idle_on_chamber_light and is_state(print_status, 'finish') and 'idle' in state_attr(wled_preset, 'options') and not is_state(wled_preset, 'idle') }}"
         then:
           - action: select.select_option
             data:
