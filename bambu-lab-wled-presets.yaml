@@ -29,6 +29,27 @@ blueprint:
           filter:
             integration: bambu_lab
             domain: light
+    idle_on_chamber_light:
+      name: Idle on chamber light toggle
+      description: Activate idle preset on chamber light toggle
+      default: true
+      selector:
+        boolean:
+    enclosure_door:
+      name: Enclosure door
+      description: Select the printer's enclosure door.
+      selector:
+        entity:
+          filter:
+            integration: bambu_lab
+            domain: binary_sensor
+            device_class: door
+    idle_on_enclosure_door:
+      name: Idle on enclosure door open/shut
+      description: Activate idle preset on enclosure door open/shut
+      default: true
+      selector:
+        boolean:
     wled_light:
       name: WLED light
       description: Select the WLED light you want to control.
@@ -56,6 +77,9 @@ variables:
   print_status: !input print_status
   current_stage: !input current_stage
   chamber_light: !input chamber_light
+  idle_on_chamber_light: !input idle_on_chamber_light
+  enclosure_door: !input enclosure_door
+  idle_on_enclosure_door: !input idle_on_enclosure_door
   wled_preset: !input wled_preset
 alias: Bambu Lab Printer WLED Presets
 description: Control WLED light presets according to the Bambu Lab printer state
@@ -78,6 +102,13 @@ trigger:
     id: chamber_light
     alias: When printer's chamber light's state changes
     entity_id: !input chamber_light
+    to:
+      - "on"
+      - "off"
+  - platform: state
+    id: enclosure_door
+    alias: When printer's enclosure door state changes
+    entity_id: !input enclosure_door
     to:
       - "on"
       - "off"
@@ -139,13 +170,26 @@ action:
             action: light.turn_on
             target:
               entity_id: !input wled_light
+        - conditions:
+            condition: trigger
+            id: enclosure_door
+          sequence:
+            if:
+              - condition: template
+                value_template: "{{ idle_on_enclosure_door and 'idle' in state_attr(wled_preset, 'options') }}"
+            then:
+              - action: select.select_option
+                data:
+                  option: "idle"
+                target:
+                  entity_id: !input wled_preset
     else:
       - condition: state
         entity_id: !input wled_light
         state: "on"
       - if:
           - condition: template
-            value_template: "{{ 'idle' in state_attr(wled_preset, 'options') }}"
+            value_template: "{{ idle_on_chamber_light and 'idle' in state_attr(wled_preset, 'options') }}"
         then:
           - action: select.select_option
             data:
