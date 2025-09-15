@@ -7,7 +7,7 @@ blueprint:
   input:
     print_status:
       name: Print status sensor
-      description: Select the printer's print status sensor.
+      description: Select the printer's print status sensor
       selector:
         entity:
           filter:
@@ -15,7 +15,7 @@ blueprint:
             domain: sensor
     current_stage:
       name: Current stage sensor
-      description: Select the printer's current stage sensor.
+      description: Select the printer's current stage sensor
       selector:
         entity:
           filter:
@@ -23,7 +23,7 @@ blueprint:
             domain: sensor
     chamber_light:
       name: Chamber light
-      description: Select the printer's chamber light.
+      description: Select the printer's chamber light
       selector:
         entity:
           filter:
@@ -36,14 +36,16 @@ blueprint:
       selector:
         boolean:
     enclosure_door:
-      name: Enclosure door
+      name: (Optional) Enclosure door
       description: Select the printer's enclosure door.
+      default: [] # workaround to make input optional
       selector:
         entity:
           filter:
             integration: bambu_lab
             domain: binary_sensor
             device_class: door
+          multiple: true # workaround to make input optional
     idle_on_enclosure_door:
       name: Idle on enclosure door open/shut
       description: Activate idle preset on enclosure door open/shut
@@ -52,7 +54,7 @@ blueprint:
         boolean:
     wled_light:
       name: WLED light
-      description: Select the WLED light you want to control.
+      description: Select the WLED light you want to control
       selector:
         entity:
           filter:
@@ -60,7 +62,7 @@ blueprint:
             domain: light
     wled_preset:
       name: WLED preset
-      description: Select the WLED light preset select you want to control.
+      description: Select the WLED light preset select you want to control
       selector:
         entity:
           filter:
@@ -68,7 +70,7 @@ blueprint:
             domain: select
     finish_idle_duration:
       name: Finish to idle duration
-      description: Select the duration before switching from finish state to idle state.
+      description: Select the duration before switching from finish state to idle state
       default:
         hours: 1
       selector:
